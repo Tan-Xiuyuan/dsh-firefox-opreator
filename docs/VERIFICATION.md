@@ -356,6 +356,23 @@ Hint: Use firefox_read or firefox_eval to inspect the page before clicking.
 
 端口 5724 不再监听，PID 20824 退出。
 
+### 4.11 命令行最小示例
+
+```powershell
+node scripts/minimal-example.mjs https://example.com/
+```
+
+实测输出：
+
+```text
+Firefox connected on port 7896 (pid 12476)
+Navigated to https://example.com/
+TITLE: Example Domain
+TEXT: 该域名仅用于文档示例，无需获得许可。…… This domain is for use in documentation examples without needing permission. ...
+```
+
+脚本结束时 `close(target:"browser")` 关闭该 Firefox，端口停止监听。
+
 ---
 
 ## 5. 验收矩阵

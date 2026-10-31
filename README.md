@@ -190,7 +190,7 @@ pnpm config set store-dir "D:\pnpm-store\v11\v11" --global
     navigationTimeoutMs: 60000
     defaultWaitMs: 10000
     maxReadChars: 30000
-    killOnDispose: false     # true = 插件卸载时杀掉自己启动的 Firefox
+    killOnDispose: true      # 插件卸载时结束会话并杀掉自己启动的 Firefox
 ```
 
 也可用环境变量（dsh Host 进程环境）覆盖路径/profile/端口/headless：
