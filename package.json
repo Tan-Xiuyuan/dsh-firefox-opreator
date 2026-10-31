@@ -1,0 +1,42 @@
+{
+  "name": "dsh-firefox-operator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Control Firefox 153 ESR from dsh through the built-in WebDriver BiDi remote agent.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "scripts",
+    "test",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ],
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.2.1-rc.5"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test --test-isolation=none test/*.test.mjs",
+    "test:live": "node scripts/live-check.mjs",
+    "live": "node scripts/live-check.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

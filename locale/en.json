@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Firefox Operator",
+    "description": "Launch or attach to Firefox 153 ESR and control tabs, navigation, DOM reads, clicks, form filling, page JavaScript, and waits through WebDriver BiDi."
+  }
+}

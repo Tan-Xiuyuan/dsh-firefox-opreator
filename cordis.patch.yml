@@ -1,0 +1,7 @@
+# dsh bundle patch: inserts the Firefox Operator host plugin.
+# Config keys are documented in README.md. Every key is optional.
+- insert:
+    - id: dsh-firefox-operator
+      name: dsh-firefox-operator
+      config:
+        headless: true
