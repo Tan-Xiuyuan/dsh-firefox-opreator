@@ -246,6 +246,15 @@ export async function startMockBidiServer(options = {}) {
         respond({ navigation: "mock-navigation", url: tab.url });
         return;
       }
+      case "browsingContext.captureScreenshot": {
+        // A valid 1x1 PNG; the transport and file-saving path are under test.
+        const png = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z0GQAAAAASUVORK5CYII=",
+          "base64",
+        );
+        respond({ data: png.toString("base64") });
+        return;
+      }
       case "input.performActions": {
         if (!tabs.has(params.context)) {
           fail("no such frame", "no such tab");
@@ -334,6 +343,8 @@ export async function startMockBidiServer(options = {}) {
         textTruncated: false,
         html: "<body>mock</body>",
         htmlTruncated: false,
+        links: [{ text: "Example", href: "https://example.test/" }],
+        linksTruncated: false,
       };
     } else if (expression.includes("loadReady")) {
       value = { ok: true, matched: true, readyState: "complete", title: tab.title, url: tab.url };

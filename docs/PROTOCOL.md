@@ -137,8 +137,9 @@ Firefox 关闭；WebSocket 可能先/后断开。插件把 `DISCONNECTED` 视为
 | `firefox_tabs switch` | `browsingContext.activate` `{context}` | 激活失败时仍按显式 context 运行 |
 | `firefox_tabs close` | `browsingContext.close` `{context}` | 关闭指定 tab |
 | `firefox_navigate` | `browsingContext.navigate` `{context,url,wait}` | `wait` = `none`/`interactive`/`complete` |
-| `firefox_read` | `script.evaluate` | 页面内返回 JSON 字符串：title/url/text/html/truncated |
-| `firefox_click` | `script.evaluate`（定位）+ `input.performActions` | 用元素中心坐标发真实 mouse move/down/up；不支持时回退 `element.click()` |
+| `firefox_read` | `script.evaluate` | 页面内返回 JSON 字符串：title/url/text/html/links/truncated |
+| `firefox_screenshot` | `browsingContext.captureScreenshot` | 返回 base64；插件落盘为 PNG/JPEG 并返回路径/尺寸 |
+| `firefox_click` | `script.evaluate`（候选/定位）+ `input.performActions` | 文本候选覆盖语义控件与 cursor:pointer/click 类 div/span；精确优先；多义返回候选。真实 mouse move/down/up，不支持时回退 `element.click()` |
 | `firefox_fill` | `script.evaluate` | 原生 setter + `input`/`change` 事件；可选 `form.requestSubmit()` |
 | `firefox_eval` | `script.evaluate` | 包装为 async 表达式，返回 `{ok,type,value}` |
 | `firefox_wait` | 轮询 `script.evaluate` | 元素状态/`document.readyState`；超时抛 `WAIT_TIMEOUT` |
@@ -296,6 +297,47 @@ if (submit) (el.form || el.closest("form")).requestSubmit();
 
 选择器条件：`attached` / `detached` / `visible` / `hidden`；可叠加 `load_state`。
 
+超时错误会附带一个最多 280 字的页面摘要（标题、截断 URL、可见文本、12 个 class），并包含最近一次页面错误。
+
+### 3.7 截图
+
+```json
+{
+  "id": 9,
+  "method": "browsingContext.captureScreenshot",
+  "params": {
+    "context": "8cc7dcd9-...",
+    "format": {"type": "image/png"}
+  }
+}
+```
+
+成功结果：
+
+```json
+{"data": "iVBORw0KGgo..."}
+```
+
+Firefox 某些构建会拒绝可选 `format`；插件会去掉它重试（默认 PNG）。插件将 base64 解码后写入 `screenshotDir`（默认 `%TEMP%\dsh-firefox-operator\screenshots`），返回绝对路径、字节数、MIME 和从 PNG/JPEG 头解析的宽高。路径可直接传给 dsh 的 `read_image`。
+
+### 3.8 文本点击候选
+
+`firefox_click` 的文本定位先收集：
+
+1. 语义控件：`a,button,input,textarea,select,label,summary,[role=button],[role=link],[onclick],[tabindex]`；
+2. `cursor:pointer` 的 div/span；
+3. class/id 带 `btn|button|login|entry|avatar|click|nav|tab|item|link|card|menu|submit|more|trigger` 的元素；
+4. 位于上述交互元素内的文本节点。
+
+排序：精确匹配 → 前缀匹配 → 包含匹配；同分时更短文本、更深节点、更小面积优先。多个同分候选不自动点击，返回：
+
+```text
+AMBIGUOUS_TEXT: text "登录" has 2 exact matches; no click was performed
+Hint: Retry with index (0-1) or a CSS selector. Candidates: [0] exact <div#login> "登录"; ...
+```
+
+`index` 是排序后的候选下标；工具返回 `clicked.match = {kind,rank,candidates}`，便于判断是否按预期命中。
+
 ---
 
 ## 4. 错误映射
@@ -319,7 +361,10 @@ BiDi 错误码会转成 `FIREFOX_<CODE>`：
 | 启动超时 | `FIREFOX_START_TIMEOUT` | 检查 profile/路径/stderr |
 | 端口被非 Firefox 占用 | `PORT_IN_USE` | 换端口 |
 | 选中的 tab 不存在 | `NO_SUCH_TAB` | `firefox_tabs action=list` |
-| 元素等待超时 | `WAIT_TIMEOUT` | 增大 `timeout_ms` |
+| 文本没有候选 | `TEXT_NOT_FOUND` | 换文字或 CSS selector；可能在 iframe/图片里 |
+| 文本有多个候选 | `AMBIGUOUS_TEXT` | 按返回的候选列表传 `index`，或换 selector |
+| 元素等待超时 | `WAIT_TIMEOUT` | 错误消息带当前页面摘要；按摘要修正 selector |
+| 截图失败 | `SCREENSHOT_FAILED` | 页面不可绘制/特权 about: 页面；换标签页重试 |
 
 底层 `bidi-client.js` 还负责：请求超时、AbortSignal 取消、关闭时拒绝所有 pending、忽略迟到响应、旧 socket 事件不污染新连接。
 

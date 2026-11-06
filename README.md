@@ -39,13 +39,13 @@ dsh agent
 dsh-firefox-operator/
 ├─ package.json              # dsh bundle 清单、导出、scripts、无运行时依赖
 ├─ cordis.patch.yml          # dsh 加载入口：插入 dsh-firefox-operator 插件行
-├─ index.js                  # Host 插件入口：inject=['tools']、注册 9 个工具、卸载清理
+├─ index.js                  # Host 插件入口：inject=['tools']、注册 10 个工具、卸载清理
 ├─ lib/
-│  ├─ firefox.js             # FirefoxOperator：启动/连接、标签页、导航、读页、点击、
+│  ├─ firefox.js             # FirefoxOperator：启动/连接、标签页、导航、读页、截图、点击、
 │  │                         # 填表、eval、等待、关闭、profiles、超时、恢复
 │  ├─ bidi-client.js         # WebDriver BiDi WebSocket 客户端：
 │  │                         # session.new / session.end、请求 ID、错误、超时、断线
-│  ├─ tools.js               # 9 个工具的参数/输出 JSON Schema、描述、输出渲染
+│  ├─ tools.js               # 10 个工具的参数/输出 JSON Schema、描述、输出渲染
 │  └─ errors.js              # 稳定错误码、WebDriver 错误到可操作提示的映射
 ├─ locale/en.json            # 插件管理器显示名/描述（英文）
 ├─ locale/zh.json            # 插件管理器显示名/描述（中文）
@@ -71,14 +71,15 @@ dsh-firefox-operator/
 | `firefox_launch` | 启动 Firefox（自动选空闲回环端口、专用 profile）或连接已开启 remote agent 的 Firefox；可带 URL |
 | `firefox_tabs` | `list` / `new` / `switch` / `close` 标签页 |
 | `firefox_navigate` | 导航到 URL，等待 `complete`/`interactive`/`none` |
-| `firefox_read` | 读取标题、URL、正文、DOM HTML；可按 CSS selector 读单个元素 |
-| `firefox_click` | 按 selector 或可见文字点击；优先 `input.performActions` 真实鼠标事件，失败回退 DOM click |
+| `firefox_read` | 读取标题、URL、正文、DOM HTML、links 列表；可按 CSS selector 读单个元素 |
+| `firefox_screenshot` | 截取当前视口，存为 PNG/JPEG 文件并返回绝对路径（可用 `read_image` 读取） |
+| `firefox_click` | 按 selector 或可见文字点击；文本候选覆盖语义控件与 `cursor:pointer`/click 类 div/span；精确匹配优先，多义时返回候选而不是乱点；真实鼠标优先，失败回退 DOM click |
 | `firefox_fill` | 填写 input/textarea/select/checkbox/radio/contenteditable，可选 `requestSubmit()` 提交 |
 | `firefox_eval` | 在页面上下文执行 JavaScript 表达式，支持 await Promise，返回 JSON 化结果 |
 | `firefox_wait` | 等待元素 `visible/hidden/attached/detached` 或 `document.readyState` |
 | `firefox_close` | 关闭当前/指定标签页、断开连接（保留 Firefox）、关闭 Firefox |
 
-以上 9 个工具在真实 dsh 会话中均可调用。所有操作串行化在一条 BiDi 命令队列中，避免标签页/会话状态互相踩踏。
+以上 10 个工具可通过 dsh 调用。所有操作串行化在一条 BiDi 命令队列中，避免标签页/会话状态互相踩踏。
 
 ---
 
@@ -102,7 +103,7 @@ dsh-firefox-operator/
    H:\files\dsh-firefox-operator
    ```
 4. 安装结果应为 `application: applied`。
-5. 刷新页面/新开一个会话，让工具清单重新组装。新会话里应出现 `firefox_*` 工具。
+5. 重启 dsh Host 进程，再新开一个会话。工具清单应包含 10 个 `firefox_*` 工具（含 `firefox_screenshot`）。
 
 **方式 B：命令行安装**
 
@@ -110,7 +111,7 @@ dsh-firefox-operator/
 dsh plugin --profile web add link:H:/files/dsh-firefox-operator
 ```
 
-安装后重启 dsh（或新开会话）以确保插件行和新工具被加载。
+安装后必须重启 dsh Host 进程（`dsh web`），**只新开会话不够**。实测：本机已运行的 `dsh web` 在 linked 源码更新后，新会话仍只看到旧的 9 个工具；只有重启 host 才会重新加载 `firefox_screenshot`（第 10 个工具）和新 schema。
 
 > 本机安装结果：`"stage":"enable","application":"applied"`，依赖以 symlink 指向本仓库：
 > `C:\Users\Administrator\.dsh\profiles\web\node_modules\dsh-firefox-operator -> H:\files\dsh-firefox-operator`。
@@ -189,7 +190,8 @@ pnpm config set store-dir "D:\pnpm-store\v11\v11" --global
     commandTimeoutMs: 20000
     navigationTimeoutMs: 60000
     defaultWaitMs: 10000
-    maxReadChars: 30000
+    maxReadChars: 30000      # 工具 max_chars 超过此值时截断
+    screenshotDir: 'C:\Users\<你>\AppData\Local\Temp\dsh-firefox-operator\screenshots'
     killOnDispose: true      # 插件卸载时结束会话并杀掉自己启动的 Firefox
 ```
 
@@ -200,6 +202,7 @@ DSH_FIREFOX_PATH
 DSH_FIREFOX_PROFILE
 DSH_FIREFOX_PORT
 DSH_FIREFOX_HEADLESS
+DSH_FIREFOX_SCREENSHOT_DIR
 FIREFOX_PATH
 ```
 
@@ -211,9 +214,9 @@ FIREFOX_PATH
 
 直接对 dsh 说（可复制）：
 
-> 使用 `firefox_launch` 启动 Firefox（headless），然后用 `firefox_navigate` 打开 `https://example.com/`，最后用 `firefox_read` 读取页面标题和正文。只汇报标题和 URL。
+> 使用 `firefox_launch` 启动 Firefox（headless），然后用 `firefox_navigate` 打开 `https://example.com/`，用 `firefox_read` 读取页面标题/正文，最后用 `firefox_screenshot` 截图。只汇报标题、URL 和截图路径。
 
-等价的三次工具调用与期望输出：
+等价的四次工具调用与期望输出：
 
 ```json
 {"name":"firefox_launch","arguments":{"headless":true}}
@@ -259,11 +262,30 @@ FIREFOX_PATH
   "readyState": "complete",
   "tag": "body",
   "text": "该域名仅用于文档示例…… Learn more",
-  "textTruncated": false
+  "textTruncated": false,
+  "links": [{"text": "Learn more", "href": "https://iana.org/domains/example"}],
+  "linksTruncated": false
 }
 ```
 
-端口、PID、tab id 每次不同；`title` 为 `Example Domain` 是网络正常时的预期结果。如果实例完全离线，`firefox_navigate` 仍可能返回 Firefox 的错误页标题，此时请检查网络。
+```json
+{"name":"firefox_screenshot","arguments":{"format":"png"}}
+```
+
+```json
+{
+  "tabId": "92adb53e-...",
+  "url": "https://example.com/",
+  "title": "Example Domain",
+  "path": "C:\\Users\\<你>\\AppData\\Local\\Temp\\dsh-firefox-operator\\screenshots\\firefox-...png",
+  "bytes": 15397,
+  "mimeType": "image/png",
+  "width": 1366,
+  "height": 683
+}
+```
+
+端口、PID、tab id、截图路径每次不同；`title` 为 `Example Domain` 是网络正常时的预期结果。如果实例完全离线，`firefox_navigate` 仍可能返回 Firefox 的错误页标题，此时请检查网络。
 
 ### 3.2 命令行最小示例
 
@@ -294,7 +316,7 @@ node scripts/live-check.mjs
 $env:FF_PORT="9234"; $env:FF_ATTACH_ONLY="1"; node scripts/live-check.mjs
 ```
 
-该脚本覆盖：启动/连接、导航、读标题/正文/DOM、真实鼠标点击、填表并提交、页面 eval、等待元素、标签页新建/切换/关闭、错误返回、错误后继续操作、关闭。实测输出见 `docs/VERIFICATION.md`。
+该脚本覆盖：启动/连接、导航、读标题/正文/DOM/links、截图、真实鼠标点击、`cursor:pointer` div 文本点击、多义文本返回候选、填表并提交、页面 eval、等待元素、WAIT_TIMEOUT 页面摘要、标签页新建/切换/关闭、错误返回、错误后继续操作、关闭。实测输出见 `docs/VERIFICATION.md`。
 
 ---
 
@@ -305,6 +327,8 @@ $env:FF_PORT="9234"; $env:FF_ATTACH_ONLY="1"; node scripts/live-check.mjs
 | 标准 | 证据 | 结论 |
 | --- | --- | --- |
 | dsh 发出的指令能稳定触发 Firefox 操作 | 在真实 dsh 会话中调用 `firefox_launch` → `firefox_navigate` → `firefox_read`，得到 `Example Domain`；`firefox_click` 改变标题；`firefox_fill(...,submit:true)` 触发提交；`firefox_eval` 返回 `42`；`firefox_wait` 命中；`firefox_tabs` 正确列出/新建/切换/关闭 | 通过 |
+| 截图与“看得见” | `firefox_screenshot` 保存 1366×683 PNG，`read_image` 成功读取；路径、字节数、尺寸返回 | 通过 |
+| 现代 div 按钮与多义文本 | 文本点击命中 `cursor:pointer` 的 `<div class="login-entry">Div Login`；两个 `Duplicate` 按钮返回 `AMBIGUOUS_TEXT` 候选，`index:1` 精确点击第二个 | 通过 |
 | Firefox 端错误能返回给 dsh | `firefox_click({"selector":"#does-not-exist"})` 返回 dsh 工具错误：`ELEMENT_NOT_FOUND: selector not found: #does-not-exist...`；随后 `firefox_read` 仍成功 | 通过 |
 | 不会导致 Firefox 或 dsh 崩溃 | 上述错误后继续执行读取；`firefox_close({"target":"browser"})` 后端口关闭、Firefox 进程退出、dsh 工具继续可用；`node scripts/live-check.mjs` 全流程 PASSED | 通过 |
 | 协议/生命周期错误可诊断 | 错误码 + hint：`FIREFOX_NOT_FOUND`、`CONNECT_TIMEOUT`、`PORT_IN_USE`、`NO_SUCH_TAB`、`WAIT_TIMEOUT`、`DISCONNECTED`、`Maximum number of active sessions` 等；`session.end` 释放会话 | 通过 |
@@ -345,7 +369,9 @@ $env:FF_PORT="9234"; $env:FF_ATTACH_ONLY="1"; node scripts/live-check.mjs
 - **`firefox_eval` 是任意页面 JavaScript**：只对可信页面使用；不要把它指向不可信内容后把结果当指令。
 - **专用 profile**：默认 profile 独立于日常 Firefox；如果要复用登录态，请显式配置 `profileDir` 指向自己的 profile，并理解 dsh agent 会拥有该 profile 的控制权。
 - **remote agent 无认证**：仅监听回环；不要将调试端口转发到公网或不可信网络。
-- **未实现**：截图、下载、文件选择器、扩展管理、iframe 内部独立上下文切换（顶层标签页操控完整）。这些不是本任务要求；需要时可基于同一 BiDi 客户端扩展。
+- **未实现**：下载、文件选择器、扩展管理、iframe 内部独立上下文切换、console/network 事件缓冲、基于 sharedId 的元素引用。当前覆盖顶层标签页与 DOM/截图/输入；需要时可基于同一 BiDi 客户端扩展。
+- **大整数精度**：BiDi/JavaScript 数字是 IEEE-754 double，超过 `2^53` 的整数在 JSON 往返中会失真；ID/金额建议以字符串读取（`String(x)` 或页面本来就返回字符串）。
+- **截图目录**：默认写到 `%TEMP%\dsh-firefox-operator\screenshots`；截图可能包含敏感页面内容，按需配置 `screenshotDir` 并清理。
 
 ---
 

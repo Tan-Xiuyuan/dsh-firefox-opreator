@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Firefox 操控器",
-    "description": "启动或连接 Firefox 153 ESR，通过 WebDriver BiDi 操控标签页、导航、DOM 读取、点击、表单填写、页面 JavaScript 与等待。"
+    "description": "启动或连接 Firefox 153 ESR，通过 WebDriver BiDi 操控标签页、导航、DOM 读取、截图、点击、表单填写、页面 JavaScript 与等待。"
   }
 }

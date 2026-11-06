@@ -1,6 +1,6 @@
 {
   "name": "dsh-firefox-operator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Control Firefox 153 ESR from dsh through the built-in WebDriver BiDi remote agent.",
   "type": "module",

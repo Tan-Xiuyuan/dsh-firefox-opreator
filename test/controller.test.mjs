@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,6 +13,7 @@ async function makeOperator(server) {
     port: server.port,
     attachOnly: true,
     profileDir,
+    screenshotDir: join(profileDir, "screenshots"),
     headless: true,
     commandTimeoutMs: 3000,
     navigationTimeoutMs: 3000,
@@ -45,6 +46,15 @@ test("controller covers launch, navigation, read, click, fill, eval, wait, tabs,
   assert.equal(read.text, `Mock body for ${nav.requestedUrl}`);
   assert.equal(read.html, "<body>mock</body>");
   assert.equal(read.readyState, "complete");
+  assert.deepEqual(read.links, [{ text: "Example", href: "https://example.test/" }]);
+
+  const shot = await operator.screenshot({ format: "png" });
+  assert.equal(existsSync(shot.path), true);
+  assert.ok(statSync(shot.path).size > 0);
+  const signature = readFileSync(shot.path).subarray(0, 8).toString("hex");
+  assert.equal(signature, "89504e470d0a1a0a");
+  assert.equal(shot.width, 1);
+  assert.equal(shot.height, 1);
 
   const click = await operator.click({ selector: "#go" });
   assert.equal(click.method, "pointer");
