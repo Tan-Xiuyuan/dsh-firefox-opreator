@@ -287,6 +287,10 @@ FIREFOX_PATH
 
 端口、PID、tab id、截图路径每次不同；`title` 为 `Example Domain` 是网络正常时的预期结果。如果实例完全离线，`firefox_navigate` 仍可能返回 Firefox 的错误页标题，此时请检查网络。
 
+真实 `firefox_screenshot` 产物（live-check 测试页）：
+
+![firefox_screenshot live check](docs/screenshot-live-check.png)
+
 ### 3.2 命令行最小示例
 
 在 dsh 沙箱之外（需要启动 Firefox 的终端）运行：

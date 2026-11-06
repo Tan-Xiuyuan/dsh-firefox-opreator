@@ -140,7 +140,8 @@ close(target:"browser") 后 Firefox 进程退出，端口关闭
   `index:1` 后命中第二个，标题变为 `Duplicate Two`；
 - `firefox_screenshot` 返回
   `bytes=15397, mimeType=image/png, width=1366, height=683`，文件头为 PNG；
-  用 `read_image` 成功读取并看到页面渲染；
+  用 `read_image` 成功读取并看到页面渲染（留存于
+  [`screenshot-live-check.png`](screenshot-live-check.png)）；
 - `wait(#never-appears, timeoutMs=400)` 返回 `WAIT_TIMEOUT`，消息含
   `Page now: title="Submitted"; ...; text="Firefox Operator live check ..."`；
 - `npm test` 6/6 通过；10 个工具的参数/输出 schema 与 mock 实际输出通过
