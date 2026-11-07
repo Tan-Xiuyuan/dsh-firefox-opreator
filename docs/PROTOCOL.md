@@ -24,6 +24,8 @@ firefox.exe
 
 `<PORT>` 默认由插件在 `127.0.0.1` 上申请空闲端口；也可以配置固定端口。
 
+Windows 上默认使用 WMI `Win32_Process.Create` 创建 Firefox（`launchMode:auto`），然后等待 `127.0.0.1:<PORT>` 的 TCP 端口；WMI 不可用时回退到直接 spawn。这样 Firefox 的 content 进程不会继承 dsh Host 的 job/受限令牌，避免 `@SB::LA::SpawnTarget` 启动失败。`launchMethod` 字段会报告实际路径（`wmi`/`direct`）。
+
 ### 1.2 连接
 
 Firefox 在该端口上提供：

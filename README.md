@@ -192,10 +192,11 @@ pnpm config set store-dir "D:\pnpm-store\v11\v11" --global
     defaultWaitMs: 10000
     maxReadChars: 30000      # 工具 max_chars 超过此值时截断
     screenshotDir: 'C:\Users\<你>\AppData\Local\Temp\dsh-firefox-operator\screenshots'
+    launchMode: auto         # auto | wmi | direct；Windows 默认优先 WMI 逃逸 Host job
     killOnDispose: true      # 插件卸载时结束会话并杀掉自己启动的 Firefox
 ```
 
-也可用环境变量（dsh Host 进程环境）覆盖路径/profile/端口/headless：
+也可用环境变量（dsh Host 进程环境）覆盖路径/profile/端口/headless/launchMode：
 
 ```text
 DSH_FIREFOX_PATH
@@ -203,8 +204,25 @@ DSH_FIREFOX_PROFILE
 DSH_FIREFOX_PORT
 DSH_FIREFOX_HEADLESS
 DSH_FIREFOX_SCREENSHOT_DIR
+DSH_FIREFOX_LAUNCH_MODE
 FIREFOX_PATH
 ```
+
+### 2.5 为什么默认用 WMI 启动 Firefox
+
+在 Windows 上，dsh Host 可能运行在一个 job object 或受限进程环境中。直接 `spawn` Firefox 时，浏览器主进程能启动，但 Firefox 自己的标签页 content 进程会因为继承受限环境而启动失败，典型 stderr：
+
+```text
+Failed to launch tab subprocess @SB::LA::SpawnTarget (Error:-2147024809)
+```
+
+`launchMode: auto` 在 Windows 上优先通过 WMI `Win32_Process.Create` 启动 Firefox，让进程由 WMI 服务创建、脱离 dsh Host 的 job；失败时回退到直接 spawn。实测 WMI 启动后 `launchMethod: "wmi"`，标签页/导航正常。
+
+- `launchMode: "wmi"`：只走 WMI，失败就报错；
+- `launchMode: "direct"`：只走原来的 spawn，适合不受 job 限制的环境；
+- `launchMode: "auto"`：默认，WMI 优先、direct 兜底。
+
+注意：WMI 启动的 Firefox 不继承 dsh Host 进程的临时环境变量（HTTP_PROXY 等）；需要代理时请使用系统/Firefox 配置。`firefoxPid` 返回 BiDi session capabilities 里的真实浏览器 PID，而不是 launcher PID。
 
 ---
 
@@ -229,6 +247,7 @@ FIREFOX_PATH
   "browser": "firefox",
   "external": false,
   "firefoxPid": 20824,
+  "launchMethod": "wmi",
   "activeTabId": "92adb53e-...",
   "tabs": [{"tabId":"92adb53e-...","url":"about:blank","title":"","type":"tab"}],
   "launched": true,
@@ -355,6 +374,7 @@ $env:FF_PORT="9234"; $env:FF_ATTACH_ONLY="1"; node scripts/live-check.mjs
 | 现象 | 处理 |
 | --- | --- |
 | `FIREFOX_NOT_FOUND` | 设置 `config.firefoxPath` 或 `FIREFOX_PATH`；确认是 `firefox.exe` 完整路径 |
+| `FIREFOX_EXITED`，stderr 含 `@SB::LA::SpawnTarget` | dsh Host 的 job/受限令牌导致 Firefox content 进程无法启动；保持 `launchMode:auto`（WMI 优先）或设为 `wmi`，并重启 dsh Host |
 | `FIREFOX_START_TIMEOUT` / 端口未监听 | 检查 profile 是否被其它 Firefox 占用；用专用 profile；看错误里附带的 stderr |
 | `CONNECT_TIMEOUT` / 端口在但不响应 | Firefox 启动早期会出现；插件会重试。若持续，确认端口确为 Firefox 而不是别的服务 |
 | `PORT_IN_USE` | 换端口，或关闭占用端口的进程；`port:0` 自动选端口 |

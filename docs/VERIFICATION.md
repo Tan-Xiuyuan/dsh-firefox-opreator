@@ -1,6 +1,6 @@
 # 实测与验收报告
 
-日期：2026-10-31（初版）/ 2026-11-06（截图、文本点击、等待摘要等增强验证）  
+日期：2026-10-31（初版）/ 2026-11-06（截图、文本点击、等待摘要等增强验证）/ 2026-11-07（WMI 自启动修复）  
 主机：Windows 10 x64  
 dsh：`0.2.1-rc.5`  
 Firefox：`Mozilla Firefox 153.5.1esr`（`D:\Program Files\Mozilla Firefox\firefox.exe`）  
@@ -17,7 +17,7 @@ Profile：`web`（`C:\Users\Administrator\.dsh\profiles\web`）
 stage: enable
 target: dsh-firefox-operator
 application: applied
-version: 0.1.0（增强后源码版本 0.2.0，linked 插件会读取最新源码）
+version: 0.1.0（增强后源码版本 0.2.1，linked 插件会读取最新源码）
 package: + dsh-firefox-operator link:H:/files/dsh-firefox-operator
 ```
 
@@ -170,6 +170,37 @@ firefox_screenshot -> 不在工具列表里
 重启后预期：10 个 `firefox_*` 工具，`protocolVersion:"1.0"`，
 `firefox_screenshot` 返回 PNG 路径。当前工作树的自动化测试、真实 Firefox
 控制器测试和 schema 校验均已通过，因此这是宿主加载时序问题，不是工具实现问题。
+
+### 3.5 自启动崩溃修复：WMI 逃逸 dsh Host job（2026-11-07）
+
+故障现象：dsh Host 直接 `spawn` Firefox 时，浏览器主进程启动后退出，stderr：
+
+```text
+Failed to launch tab subprocess @SB::LA::SpawnTarget (Error:-2147024809)
+```
+
+同一 exe/参数由独立 `Start-Process` 启动正常。根因方向是 dsh Host 的
+Windows job / 受限进程环境被 Firefox content 进程继承。
+
+修复：Windows 默认 `launchMode:"auto"`，优先通过
+`Invoke-CimMethod Win32_Process.Create` 启动（由 WMI 服务创建，脱离 dsh Host job），
+失败再回退 direct spawn。新增 `launchMethod` 输出。
+
+在 Windows 10 x64 / Firefox 153.5.1esr 实测：
+
+```text
+launch: port=2793, protocolVersion="1.0", firefoxPid=14500,
+        launchMethod="wmi", launched=true
+navigate/read/click/fill/eval/wait/tabs/screenshot -> 全部通过
+LIVE CHECK PASSED
+```
+
+清理：`firefox_close(browser)` 用 WMI session 的真实 `moz:processID` 清理；
+端口停止监听。`launchMode:"direct"` 仍保留给没有 job 限制的环境，实测：
+
+```text
+DSH_FIREFOX_LAUNCH_MODE=direct -> launchMethod="direct", LIVE CHECK PASSED
+```
 
 ---
 
@@ -422,7 +453,7 @@ TEXT: 该域名仅用于文档示例，无需获得许可。…… This domain i
 
 | 要求 | 实现 | 实测 |
 | --- | --- | --- |
-| 启动或连接 Firefox | `firefox_launch`，自动启动 / `attach_only` 连接 | 两种方式均 PASSED |
+| 启动或连接 Firefox | `firefox_launch`，自动启动（Windows WMI 优先）/ `attach_only` 连接 | 两种方式均 PASSED；`launchMethod="wmi"` |
 | 打开、关闭、切换标签页 | `firefox_tabs` + `browsingContext.create/activate/close` | PASSED |
 | 导航到 URL | `firefox_navigate` + `browsingContext.navigate` | `Example Domain` |
 | 读取标题、正文、DOM | `firefox_read`，含 `include_html`、links | PASSED |
@@ -446,6 +477,7 @@ TEXT: 该域名仅用于文档示例，无需获得许可。…… This domain i
 - 超过 2^53 的整数经过 JavaScript/JSON 会失真；ID/金额请按字符串读取。
 - `https://example.com/` 的正文会随 Mozilla 页面更新/本地化变化；验收以 `title=Example Domain` 和 HTTP 成功为准。
 - 安装环境需要对齐 pnpm store（见 README）；这是 dsh profile 的包管理环境问题，不是插件运行时问题。
+- WMI 启动依赖 Windows PowerShell/WMI 服务；若被策略禁用会自动回退 direct（此时可能重现 `@SB::LA::SpawnTarget`）。WMI 启动不继承 dsh Host 的临时代理环境变量。
 - 在 dsh 的 workspace-write 沙箱 shell 内**直接**启动 Firefox 会因低完整性进程无法完成启动；真实 dsh Host 工具调用不受影响（本报告第 4 节）。如果用户想在终端手工启动 Firefox 用于 attach，请使用普通终端（dsh 沙箱之外）。
 
 ---
